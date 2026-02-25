@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>RunPulse — Live GPS Tracker</title>
+    <meta name="description"
+        content="Premium real-time GPS run tracker with live pace, segments, calorie tracking, and detailed analytics.">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#0a0e1a">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+
+    <!-- Animated Background Particles -->
+    <canvas id="particleCanvas" class="particle-bg"></canvas>
+
+    <!-- Countdown Overlay -->
+    <div class="countdown-overlay hidden" id="countdownOverlay">
+        <div class="countdown-number" id="countdownNum">3</div>
+        <div class="countdown-text">GET READY</div>
+    </div>
+
+    <!-- App Header -->
+    <header class="app-header">
+        <div class="header-inner">
+            <div class="brand">
+                <div class="brand-icon"><i class="fa-solid fa-bolt"></i></div>
+                <div>
+                    <div class="brand-name">RunPulse</div>
+                    <div class="brand-tag">GPS Live Tracker</div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="wake-indicator" id="wakeIndicator" title="Screen Wake Lock">
+                    <div class="wake-dot" id="wakeDot"></div>
+                    <span id="wakeText">OFF</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Nav Tabs -->
+    <nav class="nav" id="mainNav">
+        <div class="nav-tab active" data-page="run">
+            <i class="fa-solid fa-person-running"></i>
+            <span>Live Run</span>
+        </div>
+        <div class="nav-tab" data-page="stats">
+            <i class="fa-solid fa-chart-line"></i>
+            <span>Stats</span>
+        </div>
+        <div class="nav-tab" data-page="history">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span>History</span>
+        </div>
+        <div class="nav-indicator" id="navIndicator"></div>
+    </nav>
+
+    <!-- =============== LIVE RUN PAGE =============== -->
+    <div class="page active" id="page-run">
+
+        <!-- Segment Selector -->
+        <div class="seg-row">
+            <label><i class="fa-solid fa-ruler"></i> Segment</label>
+            <div class="seg-pills" id="segPills">
+                <div class="seg-pill" data-size="125">125m</div>
+                <div class="seg-pill active" data-size="250">250m</div>
+                <div class="seg-pill" data-size="500">500m</div>
+                <div class="seg-pill" data-size="1000">1 km</div>
+            </div>
+        </div>
+
+        <!-- Big Stats -->
+        <div class="big-stats">
+            <div class="big-stat glass-card" id="distCard">
+                <div class="bs-icon"><i class="fa-solid fa-road"></i></div>
+                <div class="bs-label">Distance</div>
+                <div class="bs-value" id="dispDist">0.00</div>
+                <div class="bs-unit">metres</div>
+            </div>
+            <div class="big-stat glass-card">
+                <div class="bs-icon"><i class="fa-solid fa-stopwatch"></i></div>
+                <div class="bs-label">Total Time</div>
+                <div class="bs-value" id="dispTimer">00:00</div>
+                <div class="bs-unit">hh:mm:ss</div>
+            </div>
+        </div>
+
+        <!-- Live Info Row -->
+        <div class="info-row">
+            <div class="info-cell glass-card">
+                <div class="ic-icon"><i class="fa-solid fa-stopwatch"></i></div>
+                <div class="ic-label">Segment</div>
+                <div class="ic-value" id="dispSegTimer">00:00</div>
+            </div>
+            <div class="info-cell glass-card">
+                <div class="ic-icon"><i class="fa-solid fa-gauge-high"></i></div>
+                <div class="ic-label">Pace</div>
+                <div class="ic-value" id="dispPace">–:––</div>
+            </div>
+            <div class="info-cell glass-card">
+                <div class="ic-icon"><i class="fa-solid fa-flag-checkered"></i></div>
+                <div class="ic-label">Est. 5km</div>
+                <div class="ic-value" id="dispETA">––:––</div>
+            </div>
+        </div>
+
+        <!-- Extra Info Row -->
+        <div class="info-row">
+            <div class="info-cell glass-card">
+                <div class="ic-icon"><i class="fa-solid fa-fire-flame-curved"></i></div>
+                <div class="ic-label">Calories</div>
+                <div class="ic-value" id="dispCalories">0</div>
+            </div>
+            <div class="info-cell glass-card">
+                <div class="ic-icon"><i class="fa-solid fa-tachometer-alt"></i></div>
+                <div class="ic-label">Speed</div>
+                <div class="ic-value" id="dispSpeed">0.0</div>
+            </div>
+            <div class="info-cell glass-card">
+                <div class="ic-icon"><i class="fa-solid fa-mountain"></i></div>
+                <div class="ic-label">Elevation</div>
+                <div class="ic-value" id="dispElevation">–</div>
+            </div>
+        </div>
+
+        <!-- GPS Status -->
+        <div class="gps-status glass-card">
+            <div class="gps-dot" id="gpsDot"></div>
+            <span id="gpsText">GPS: waiting...</span>
+            <span class="gps-accuracy" id="gpsAccBadge"></span>
+        </div>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn btn-start" id="btnStart">
+                <i class="fa-solid fa-play"></i> Start Run
+            </button>
+            <button class="btn btn-pause hidden" id="btnPause">
+                <i class="fa-solid fa-pause"></i>
+            </button>
+            <button class="btn btn-stop" id="btnStop" disabled>
+                <i class="fa-solid fa-stop"></i> Finish
+            </button>
+        </div>
+
+        <!-- Segment Log -->
+        <div class="section-card">
+            <div class="log-header">
+                <h3><i class="fa-solid fa-list-ul"></i> Segments</h3>
+                <div class="seg-badges">
+                    <span class="badge badge-green hidden" id="bestBadge"><i class="fa-solid fa-bolt"></i> Best: <span
+                            id="bestPaceVal"></span></span>
+                    <span class="badge badge-muted" id="segCountBadge">0 completed</span>
+                </div>
+            </div>
+            <div class="log-container" id="logContainer">
+                <div class="empty-state">
+                    <i class="fa-solid fa-satellite-dish"></i>
+                    <p>Segment times will appear here as you run.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Split Table -->
+        <div class="section-card" id="splitSection">
+            <h3 class="section-title" id="splitTableLabel">Split Group Table</h3>
+            <div class="table-wrapper">
+                <table class="split-table" id="splitTable">
+                    <thead>
+                        <tr>
+                            <th>From</th>
+                            <th>S1</th>
+                            <th>S2</th>
+                            <th>S3</th>
+                            <th>S4</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="splitBody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Chart -->
+        <div class="section-card chart-box">
+            <h3 class="section-title"><i class="fa-solid fa-chart-area"></i> Pace Chart</h3>
+            <div class="chart-inner">
+                <canvas id="runChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- =============== STATS PAGE =============== -->
+    <div class="page" id="page-stats">
+        <div class="page-header">
+            <h2><i class="fa-solid fa-trophy"></i> Your Statistics</h2>
+            <p class="page-sub">Lifetime performance overview</p>
+        </div>
+
+        <div class="stats-grid" id="statsGrid">
+            <div class="stat-card glass-card">
+                <div class="stat-icon orange"><i class="fa-solid fa-road"></i></div>
+                <div class="stat-info">
+                    <div class="stat-val" id="statTotalDist">0 km</div>
+                    <div class="stat-label">Total Distance</div>
+                </div>
+            </div>
+            <div class="stat-card glass-card">
+                <div class="stat-icon blue"><i class="fa-solid fa-shoe-prints"></i></div>
+                <div class="stat-info">
+                    <div class="stat-val" id="statTotalRuns">0</div>
+                    <div class="stat-label">Total Runs</div>
+                </div>
+            </div>
+            <div class="stat-card glass-card">
+                <div class="stat-icon green"><i class="fa-solid fa-gauge-high"></i></div>
+                <div class="stat-info">
+                    <div class="stat-val" id="statBestPace">–:––</div>
+                    <div class="stat-label">Best Avg Pace</div>
+                </div>
+            </div>
+            <div class="stat-card glass-card">
+                <div class="stat-icon purple"><i class="fa-solid fa-clock"></i></div>
+                <div class="stat-info">
+                    <div class="stat-val" id="statTotalTime">0h 0m</div>
+                    <div class="stat-label">Total Time</div>
+                </div>
+            </div>
+            <div class="stat-card glass-card">
+                <div class="stat-icon red"><i class="fa-solid fa-fire"></i></div>
+                <div class="stat-info">
+                    <div class="stat-val" id="statTotalCal">0</div>
+                    <div class="stat-label">Est. Calories</div>
+                </div>
+            </div>
+            <div class="stat-card glass-card">
+                <div class="stat-icon amber"><i class="fa-solid fa-arrow-trend-up"></i></div>
+                <div class="stat-info">
+                    <div class="stat-val" id="statLongestRun">0 km</div>
+                    <div class="stat-label">Longest Run</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export/Import -->
+        <div class="section-card" style="margin-top:1.25rem;">
+            <h3 class="section-title"><i class="fa-solid fa-database"></i> Data Management</h3>
+            <div class="data-actions">
+                <button class="btn-secondary" id="exportBtn"><i class="fa-solid fa-download"></i> Export Data</button>
+                <label class="btn-secondary" for="importFile"><i class="fa-solid fa-upload"></i> Import Data</label>
+                <input type="file" id="importFile" accept=".json" style="display:none">
+            </div>
+        </div>
+    </div>
+
+    <!-- =============== HISTORY PAGE =============== -->
+    <div class="page" id="page-history">
+        <div class="page-header">
+            <div>
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> Run History</h2>
+                <p class="page-sub" id="histSummary">Your recent runs</p>
+            </div>
+            <button class="btn-danger-sm" id="clearHistoryBtn">
+                <i class="fa-solid fa-trash-can"></i> Clear
+            </button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+
+        <!-- History Detail Modal -->
+        <div class="h-modal hidden" id="histModal">
+            <div class="h-modal-inner">
+                <div class="h-modal-header">
+                    <h2 id="hModalTitle">Run Detail</h2>
+                    <button class="close-btn" id="closeModal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div id="hModalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast hidden" id="toast">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="toastMsg">Saved!</span>
+    </div>
+
+    <script src="script.js"></script>
+    <!-- <script src="test-simulator.js"></script> -->
+
+</body>
+
+</html>
