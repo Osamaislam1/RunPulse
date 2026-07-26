@@ -80,12 +80,73 @@ body {
     inset: 0;
     z-index: 999;
     background: rgba(10, 14, 26, 0.95);
+    -webkit-backdrop-filter: blur(20px);
     backdrop-filter: blur(20px);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 1rem;
+    padding: 1.5rem;
+    /* Shown/hidden via showOverlay()/hideOverlay() in script.js, not the .hidden class
+       directly — an instant display:none<->flex pop on a full-viewport blurred layer reads
+       as a blank flash, especially when GPS locks fast enough that the gate is up for only
+       a fraction of a second. */
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.countdown-overlay.visible {
+    opacity: 1;
+}
+
+.countdown-body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+}
+
+/* ---- GPS LOCK GATE ---- */
+.gps-wait {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.6rem;
+    max-width: 22rem;
+}
+
+.gps-wait-icon {
+    font-size: 2.75rem;
+    color: var(--orange);
+    animation: countPulse 1.6s ease infinite;
+    margin-bottom: 0.35rem;
+}
+
+.gps-wait-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.gps-wait-acc {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--amber);
+}
+
+.gps-wait-hint {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--text2);
+}
+
+.gps-wait-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
 }
 
 .countdown-number {
@@ -242,7 +303,6 @@ body {
     gap: 0;
     max-width: 640px;
     margin: 0 auto;
-    position: relative;
 }
 
 .nav-tab {
@@ -320,6 +380,7 @@ body {
     background: linear-gradient(135deg, var(--glass2), var(--glass));
     border: 1px solid var(--border);
     border-radius: var(--r);
+    -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
     transition: all 0.3s ease;
 }
@@ -659,6 +720,84 @@ body {
     color: var(--text3);
 }
 
+/* ---- LOCATION PERMISSION ---- */
+.perm-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text2);
+    margin-bottom: 0.6rem;
+    padding: 0.6rem 0.85rem;
+}
+
+.perm-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text3);
+    flex-shrink: 0;
+    transition: all 0.3s;
+}
+
+.perm-dot.good {
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+}
+
+.perm-dot.weak {
+    background: var(--amber);
+    box-shadow: 0 0 6px var(--amber);
+}
+
+.perm-dot.bad {
+    background: var(--red);
+    box-shadow: 0 0 6px var(--red);
+}
+
+.perm-btn {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.8rem;
+    background: var(--glass2);
+    border: 1px solid var(--border2);
+    border-radius: var(--r2);
+    color: var(--text1);
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-family: var(--font);
+    cursor: pointer;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.perm-btn:hover {
+    background: var(--glass);
+    border-color: var(--orange);
+    color: var(--orange2);
+}
+
+.perm-help {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    font-size: 0.74rem;
+    line-height: 1.4;
+    color: var(--amber);
+    background: rgba(255, 202, 40, 0.08);
+    border: 1px solid rgba(255, 202, 40, 0.25);
+    border-radius: var(--r2);
+    padding: 0.65rem 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.perm-help i {
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
 /* ---- BADGES ---- */
 .badge {
     display: inline-flex;
@@ -868,6 +1007,30 @@ body {
 
 .chart-inner canvas {
     height: 100% !important;
+}
+
+/* Shown when Chart.js could not load (offline) — the run itself is unaffected. */
+.chart-fallback {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    text-align: center;
+    color: var(--text3);
+    padding: 1rem;
+}
+
+.chart-fallback i {
+    font-size: 2rem;
+    opacity: 0.3;
+}
+
+.chart-fallback p {
+    font-size: 0.82rem;
+    max-width: 18rem;
+    line-height: 1.4;
 }
 
 /* ---- PAGE HEADER ---- */
@@ -1102,6 +1265,7 @@ body {
     inset: 0;
     z-index: 200;
     background: rgba(0, 0, 0, 0.8);
+    -webkit-backdrop-filter: blur(12px);
     backdrop-filter: blur(12px);
     display: flex;
     align-items: flex-end;

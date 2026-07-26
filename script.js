@@ -23,11 +23,45 @@ let chartInstance = null;
 let lastElevation = null;
 let elevationGain = 0;
 
+let lastAccuracy = null;      // Most recent reported accuracy, for the GPS lock screen
+let startPending = false;     // True between tapping Start and the run actually beginning
+
 // ---- GPS Filtering ----
 const MAX_ACCURACY = 50;      // Reject positions worse than 50m accuracy
 const GPS_WARMUP_ACC = 20;    // Wait until GPS accuracy is this good before tracking
 const MIN_DELTA = 2.0;        // Minimum metres movement before adding distance
 const MAX_SPEED_MPS = 10;     // Reject GPS jumps implying speed > 36 km/h
+const MAX_ALT_ACCURACY = 15;  // Ignore altitude from fixes less certain than this
+const MIN_ELEVATION_DELTA = 3;// Altitude change that counts as real climb, not noise
+const GPS_STALE_MS = 5000;    // No fresh fix for this long => blank the live readouts
+const GPS_LOCK_HINT_MS = 15000; // Offer "start anyway" after waiting this long for a lock
+const PACE_WINDOW_MS = 30000; // Rolling window backing the live pace figure
+const PACE_MAX_DT = 10;       // Discard pace samples spanning a longer gap than this (s)
+// Floor on how long the "Acquiring GPS" gate stays up. Without this, a fast lock (warm
+// receiver, cached fix) can resolve inside one poll tick and the gate flashes by unreadably.
+const MIN_GPS_VISIBLE_MS = 700;
+const OVERLAY_FADE_MS = 200;   // Must match the .countdown-overlay transition duration in CSS
+
+// Shared watchPosition options — every caller must use the same settings.
+const GEO_OPTS = { enableHighAccuracy: true, timeout: 12000, maximumAge: 1000 };
+
+// =====================
+// Countdown Overlay show/hide (fade, not an instant display:none<->flex pop)
+// =====================
+function showOverlay() {
+    const overlay = document.getElementById('countdownOverlay');
+    overlay.classList.remove('hidden');
+    // Force layout so the browser commits display:flex before opacity animates — adding
+    // 'visible' in the same tick as removing 'hidden' would skip the transition entirely.
+    void overlay.offsetWidth;
+    overlay.classList.add('visible');
+}
+
+function hideOverlay() {
+    const overlay = document.getElementById('countdownOverlay');
+    overlay.classList.remove('visible');
+    setTimeout(() => overlay.classList.add('hidden'), OVERLAY_FADE_MS);
+}
 
 // ---- Kalman Filter State ----
 // Independently filters latitude and longitude using a 1D Kalman filter.
@@ -111,15 +145,22 @@ const HISTORY_KEY = 'lrt_history';
 // =====================
 // Toast Notification
 // =====================
+// Timers live in module scope so a second toast cancels the first one's dismissal
+// instead of being cut short by it.
+let toastHideTimer = null;
+let toastCleanupTimer = null;
+
 function showToast(msg, duration = 2500) {
     const toast = document.getElementById('toast');
     const toastMsg = document.getElementById('toastMsg');
+    clearTimeout(toastHideTimer);
+    clearTimeout(toastCleanupTimer);
     toastMsg.textContent = msg;
     toast.classList.remove('hidden');
     requestAnimationFrame(() => toast.classList.add('show'));
-    setTimeout(() => {
+    toastHideTimer = setTimeout(() => {
         toast.classList.remove('show');
-        setTimeout(() => toast.classList.add('hidden'), 350);
+        toastCleanupTimer = setTimeout(() => toast.classList.add('hidden'), 350);
     }, duration);
 }
 
@@ -128,10 +169,16 @@ function showToast(msg, duration = 2500) {
 // =====================
 async function acquireWakeLock() {
     if (!('wakeLock' in navigator)) return;
+    if (wakeLock) return;   // already held — re-requesting would leak the old sentinel
     try {
         wakeLock = await navigator.wakeLock.request('screen');
         setWakeStatus(true);
-        wakeLock.addEventListener('release', () => setWakeStatus(false));
+        // Clear the handle on release (the browser drops the lock when the page is
+        // hidden), so the visibilitychange handler can re-acquire it on return.
+        wakeLock.addEventListener('release', () => {
+            wakeLock = null;
+            setWakeStatus(false);
+        });
     } catch (e) {
         console.warn('Wake lock denied:', e.message);
     }
@@ -153,6 +200,74 @@ document.addEventListener('visibilitychange', async () => {
         await acquireWakeLock();
     }
 });
+
+// =====================
+// Location Permission
+// =====================
+// Android/Chrome's "Only this time" grant expires each session, causing the
+// native permission dialog to reappear on every run. Surfacing an explicit
+// check + request step (instead of only prompting implicitly inside
+// startRun's watchPosition call) lets the user grant it deliberately, and
+// "denied" can only be undone by the user in browser/site settings — JS
+// cannot force a re-prompt, so that state gets inline guidance instead.
+let lastPermState = 'unknown';
+
+function setPermStatus(state) {
+    lastPermState = state;
+    const dot = document.getElementById('permDot');
+    const text = document.getElementById('permText');
+    const btn = document.getElementById('permBtn');
+    const help = document.getElementById('permHelp');
+
+    btn.classList.add('hidden');
+    help.classList.add('hidden');
+
+    if (state === 'granted') {
+        dot.className = 'perm-dot good';
+        text.textContent = 'Location access granted';
+    } else if (state === 'denied') {
+        dot.className = 'perm-dot bad';
+        text.textContent = 'Location blocked';
+        help.classList.remove('hidden');
+    } else {
+        dot.className = 'perm-dot weak';
+        text.textContent = 'Location permission needed';
+        btn.classList.remove('hidden');
+    }
+}
+
+async function checkGeoPermission() {
+    if (!navigator.geolocation) {
+        setPermStatus('denied');
+        return;
+    }
+    if (!navigator.permissions || !navigator.permissions.query) {
+        // Safari/iOS: no Permissions API for geolocation — assume prompt state
+        setPermStatus('prompt');
+        return;
+    }
+    try {
+        const status = await navigator.permissions.query({ name: 'geolocation' });
+        setPermStatus(status.state);
+        status.onchange = () => setPermStatus(status.state);
+    } catch (e) {
+        setPermStatus('prompt');
+    }
+}
+
+function requestGeoPermission() {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve(false); return; }
+        navigator.geolocation.getCurrentPosition(
+            () => { checkGeoPermission(); resolve(true); },
+            () => { checkGeoPermission(); resolve(false); },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+    });
+}
+
+document.getElementById('permBtn').addEventListener('click', requestGeoPermission);
+checkGeoPermission();
 
 // =====================
 // Nav Tabs with Indicator
@@ -215,9 +330,10 @@ updateSplitTableHeader();
 // =====================
 function runCountdown() {
     return new Promise(resolve => {
-        const overlay = document.getElementById('countdownOverlay');
+        const body = document.getElementById('countdownBody');
         const num = document.getElementById('countdownNum');
-        overlay.classList.remove('hidden');
+        showOverlay();   // no-op if waitForGpsLock already left it open
+        body.classList.remove('hidden');
         let count = 3;
         num.textContent = count;
 
@@ -231,7 +347,8 @@ function runCountdown() {
             } else {
                 clearInterval(interval);
                 num.style.fontSize = '';
-                overlay.classList.add('hidden');
+                body.classList.add('hidden');
+                hideOverlay();
                 resolve();
             }
         }, 800);
@@ -239,40 +356,178 @@ function runCountdown() {
 }
 
 // =====================
+// GPS Lock Gate
+// =====================
+// The receiver needs 10-30s to reach a usable fix. Previously the countdown ran first
+// and watchPosition started cold afterwards, so the warm-up happened while the user was
+// already running and the opening 20-60m were never counted. Now the watch is started
+// first and the countdown waits behind this gate.
+function waitForGpsLock() {
+    return new Promise(resolve => {
+        const wait = document.getElementById('gpsWait');
+        const body = document.getElementById('countdownBody');
+        const accEl = document.getElementById('gpsWaitAcc');
+        const anyway = document.getElementById('gpsStartAnyway');
+        const cancel = document.getElementById('gpsCancel');
+
+        showOverlay();
+        body.classList.add('hidden');
+        wait.classList.remove('hidden');
+        anyway.classList.add('hidden');
+
+        let settled = false;
+        let minTimeTimer = null;
+        function finish(locked) {
+            if (settled) return;
+            settled = true;
+            clearInterval(poll);
+            clearTimeout(minTimeTimer);
+            anyway.onclick = null;
+            cancel.onclick = null;
+            wait.classList.add('hidden');
+            if (!locked) hideOverlay();
+            resolve(locked);
+        }
+
+        const startedAt = Date.now();
+        // A lock detected automatically (the common case) waits out a minimum display time
+        // so a fast lock doesn't flash by before the user can read it. A lock accepted via
+        // the user's own "Start anyway" click below bypasses this and finishes immediately
+        // — that's already a deliberate action, not something to delay further.
+        function finishLocked() {
+            const remaining = MIN_GPS_VISIBLE_MS - (Date.now() - startedAt);
+            if (remaining > 0) minTimeTimer = setTimeout(() => finish(true), remaining);
+            else finish(true);
+        }
+
+        const poll = setInterval(() => {
+            if (gpsReady) { clearInterval(poll); finishLocked(); return; }
+            accEl.textContent = lastAccuracy != null
+                ? `±${lastAccuracy.toFixed(0)}m — need ±${GPS_WARMUP_ACC}m`
+                : 'Waiting for first fix…';
+            // Never trap the user behind a lock that may never come (indoors, poor sky view).
+            if (Date.now() - startedAt > GPS_LOCK_HINT_MS) anyway.classList.remove('hidden');
+        }, 500);
+
+        anyway.onclick = () => {
+            // Accept a worse fix deliberately: tracking starts now, accuracy be damned.
+            gpsReady = true;
+            finish(true);
+        };
+        cancel.onclick = () => finish(false);
+
+        if (gpsReady) finishLocked();
+    });
+}
+
+// =====================
+// GPS Watch (single owner of watchId)
+// =====================
+function startGpsWatch() {
+    if (watchId !== null) return;
+    watchId = navigator.geolocation.watchPosition(onPosition, onGPSError, GEO_OPTS);
+}
+
+function stopGpsWatch() {
+    if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+}
+
+// Elapsed run seconds, excluding all paused time — including a pause that is still open.
+// Single source of truth: stopRun, saveRun, updateTimers and the 5k projection all use it.
+function currentElapsedS() {
+    if (!startTime) return 0;
+    const pausedMs = elapsedPauseMs + (isPaused && pauseStartTime ? Date.now() - pauseStartTime : 0);
+    return (Date.now() - startTime - pausedMs) / 1000;
+}
+
+// =====================
 // Start / Pause / Stop
 // =====================
 document.getElementById('btnStart').addEventListener('click', async () => {
+    // Must happen synchronously inside the gesture, before any await, or iOS will not
+    // let the audio context resume and segment beeps stay silent all run.
+    unlockAudio();
+
     if (isPaused) {
         resumeRun();
         return;
     }
-    await runCountdown();
-    startRun();
+    if (startPending) return;
+
+    if (lastPermState === 'denied') {
+        document.getElementById('permHelp').classList.remove('hidden');
+        showToast('Location is blocked — enable it in browser settings.');
+        return;
+    }
+    if (lastPermState !== 'granted') {
+        const granted = await requestGeoPermission();
+        if (!granted) {
+            showToast('Location permission is required to start a run.');
+            return;
+        }
+    }
+
+    startPending = true;
+    try {
+        if (!navigator.geolocation) { alert('Geolocation not supported.'); return; }
+        prepareRun();
+        const locked = await waitForGpsLock();
+        if (!locked) {
+            abortPreparedRun();
+            return;
+        }
+        await runCountdown();
+        startRun();
+    } finally {
+        startPending = false;
+    }
 });
 
 document.getElementById('btnPause').addEventListener('click', pauseRun);
 document.getElementById('btnStop').addEventListener('click', stopRun);
 
-function startRun() {
-    if (!navigator.geolocation) { alert('Geolocation not supported.'); return; }
-
-    isRunning = true;
+// Phase 1 of starting: clear tracking state and get the receiver warming up. The run
+// clock does NOT start here — startRun() does that once GPS is locked and the countdown
+// has finished. onPosition refuses to accumulate distance while isRunning is false.
+function prepareRun() {
+    isRunning = false;
     isPaused = false;
     totalDistance = 0;
     previousPosition = null;
     segments = [];
     elapsedPauseMs = 0;
+    pauseStartTime = 0;
     elevationGain = 0;
     lastElevation = null;
     kfLat = null;
     kfLon = null;
     gpsReady = false;
-    startTime = Date.now();
-    segmentStartTime = Date.now();
+    lastAccuracy = null;
+    startTime = 0;
+    paceBuffer = [];
 
     resetDisplay();
-    initChart();
+    startGpsWatch();
+    // Waiting for a lock can take 30s of standing still — don't let the screen sleep.
     acquireWakeLock();
+}
+
+function abortPreparedRun() {
+    stopGpsWatch();
+    releaseWakeLock();
+    setGPSStatus('stopped', 'GPS: stopped');
+    showToast('Start cancelled.');
+}
+
+// Phase 2: GPS is locked and the countdown has run — start the clock.
+function startRun() {
+    isRunning = true;
+    isPaused = false;
+    startTime = Date.now();
+    segmentStartTime = startTime;
 
     const btnStart = document.getElementById('btnStart');
     const btnPause = document.getElementById('btnPause');
@@ -286,12 +541,12 @@ function startRun() {
     document.querySelectorAll('.seg-pill').forEach(p => p.style.pointerEvents = 'none');
 
     timerInterval = setInterval(updateTimers, 500);
+    startGpsWatch();   // no-op if prepareRun's watch is still live
+    acquireWakeLock();
 
-    watchId = navigator.geolocation.watchPosition(
-        onPosition,
-        onGPSError,
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 1000 }
-    );
+    // Last, and non-fatal: Chart.js is CDN-loaded and may be missing offline. Nothing
+    // below this line is required for the run to be tracked.
+    initChart();
 
     showToast('Run started! 🏃');
 }
@@ -309,13 +564,19 @@ function pauseRun() {
     btnStart.classList.remove('running');
     btnPause.classList.add('hidden');
 
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    // The watch stays live. onPosition early-returns while paused, so no distance is
+    // accumulated, and keeping the receiver warm avoids paying the 10-30s warm-up cost
+    // again on resume — which used to silently drop the first stretch after every pause.
     showToast('Run paused ⏸️');
 }
 
 function resumeRun() {
+    const pausedFor = Date.now() - pauseStartTime;
     isPaused = false;
-    elapsedPauseMs += Date.now() - pauseStartTime;
+    elapsedPauseMs += pausedFor;
+    // Charge the pause to the pause ledger, not to the segment in progress.
+    segmentStartTime += pausedFor;
+    pauseStartTime = 0;
 
     const btnStart = document.getElementById('btnStart');
     const btnPause = document.getElementById('btnPause');
@@ -325,28 +586,35 @@ function resumeRun() {
     btnPause.classList.remove('hidden');
 
     timerInterval = setInterval(updateTimers, 500);
+
+    // Re-anchor position: the filter estimate is stale if the user moved while paused,
+    // and previousPosition must not bridge the gap as travelled distance. gpsReady stays
+    // true — the receiver never stopped, so there is nothing to warm up.
     previousPosition = null;
     kfLat = null;
     kfLon = null;
-    gpsReady = false;
-
-    watchId = navigator.geolocation.watchPosition(
-        onPosition,
-        onGPSError,
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 1000 }
-    );
 
     showToast('Run resumed! ▶️');
 }
 
 function stopRun() {
+    // Settle an open pause into both ledgers before measuring anything. Finishing while
+    // paused used to charge the entire final pause to run time (and to the in-progress
+    // segment), inflating the saved total time and average pace permanently.
+    if (isRunning && isPaused && pauseStartTime) {
+        const pausedFor = Date.now() - pauseStartTime;
+        elapsedPauseMs += pausedFor;
+        segmentStartTime += pausedFor;
+        pauseStartTime = 0;
+    }
+
     // Capture run data BEFORE resetting state
     const hadDistance = totalDistance > 0;
-    const runDurationS = isRunning ? (Date.now() - startTime - elapsedPauseMs) / 1000 : 0;
+    const runDurationS = isRunning ? currentElapsedS() : 0;
 
     isRunning = false;
     isPaused = false;
-    if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    stopGpsWatch();
     clearInterval(timerInterval);
     releaseWakeLock();
 
@@ -386,7 +654,7 @@ function stopRun() {
             updateSplitTable();
             updateChart();
         }
-        saveRun();
+        saveRun(runDurationS);
         showToast('Run saved! ✅');
     } else if (segments.length === 0 && totalDistance === 0) {
         showToast('No GPS data recorded.');
@@ -398,21 +666,27 @@ function stopRun() {
 // =====================
 function onPosition(pos) {
     if (isPaused) return;
-    const { latitude, longitude, accuracy, altitude } = pos.coords;
-
-    // Elevation tracking
-    if (altitude != null) {
-        if (lastElevation !== null && altitude > lastElevation) {
-            elevationGain += altitude - lastElevation;
-        }
-        lastElevation = altitude;
-        document.getElementById('dispElevation').textContent = `${Math.round(elevationGain)}m`;
-    }
+    const { latitude, longitude, accuracy, altitude, altitudeAccuracy } = pos.coords;
+    lastAccuracy = accuracy;
 
     // Hard reject: too inaccurate to be of any use
     if (accuracy > MAX_ACCURACY) {
         setGPSStatus('bad', `GPS: ±${accuracy.toFixed(1)}m — skipped`);
         return;
+    }
+
+    // Elevation tracking — deliberately below the accuracy gate, since a fix too poor to
+    // trust for position is also too poor to trust for altitude. Raw GPS altitude drifts
+    // by +/-10-30m, so only changes clearing MIN_ELEVATION_DELTA from the last committed
+    // reading count; otherwise a flat run accumulates hundreds of metres of fake climb.
+    if (altitude != null && altitudeAccuracy != null && altitudeAccuracy <= MAX_ALT_ACCURACY) {
+        if (lastElevation === null) {
+            lastElevation = altitude;
+        } else if (Math.abs(altitude - lastElevation) >= MIN_ELEVATION_DELTA) {
+            if (altitude > lastElevation) elevationGain += altitude - lastElevation;
+            lastElevation = altitude;
+        }
+        document.getElementById('dispElevation').textContent = `${Math.round(elevationGain)}m`;
     }
 
     // GPS quality status
@@ -461,6 +735,16 @@ function onPosition(pos) {
     if (dt > 0 && delta / dt > MAX_SPEED_MPS) {
         kfLat = { value: prevLat, variance: kfLat.variance };
         kfLon = { value: prevLon, variance: kfLon.variance };
+        return;
+    }
+
+    // Locked but not started yet (GPS gate / countdown): keep the filter and the reference
+    // position current so the first metres after "GO!" are measured from where the user
+    // actually is, but do not bank distance against a clock that has not started.
+    if (!isRunning) {
+        pos.filteredLat = filteredLat;
+        pos.filteredLon = filteredLon;
+        previousPosition = pos;
         return;
     }
 
@@ -534,38 +818,47 @@ function onSegmentComplete(completedCount) {
 // =====================
 function updateTimers() {
     if (!isRunning || isPaused) return;
-    const elapsed = (Date.now() - startTime - elapsedPauseMs) / 1000;
+    const elapsed = currentElapsedS();
     document.getElementById('dispTimer').textContent = formatTimeLong(elapsed);
 
     const segElapsed = (Date.now() - segmentStartTime) / 1000;
     document.getElementById('dispSegTimer').textContent = formatTime(segElapsed);
 
-    // Freeze pace to --:-- if no new GPS point in 5 seconds (stationary at light)
-    if (previousPosition && (Date.now() - previousPosition.timestamp > 5000)) {
+    // No fresh GPS for a while (stationary at a light): every rate-derived readout is
+    // stale, so blank them rather than displaying a frozen number as if it were live.
+    const gpsStale = previousPosition && (Date.now() - previousPosition.timestamp > GPS_STALE_MS);
+    if (gpsStale) {
         document.getElementById('dispPace').textContent = '–:––';
+        document.getElementById('dispSpeed').textContent = '0.0';
+        document.getElementById('dispETA').textContent = '––:––';
+    } else if (totalDistance > 100 && elapsed > 0) {
+        // Whole-run projection, so it belongs on the clock tick rather than inside the
+        // live-pace path where it only updated when a pace sample happened to qualify.
+        document.getElementById('dispETA').textContent = formatTimeLong((elapsed / totalDistance) * 5000);
     }
 }
 
 // =====================
-// Live Pace (rolling buffer; only used while running)
+// Live Pace (rolling time window; only used while running)
 // When run is stopped, stopRun() sets PACE to average pace (total time / total distance).
 // =====================
 let paceBuffer = [];
 function updateLivePace(delta, dt) {
-    paceBuffer.push({ delta, dt });
-    if (paceBuffer.length > 12) paceBuffer.shift();
+    // A large dt means the runner was standing still and MIN_DELTA held previousPosition
+    // back, so this sample spans a stationary gap and says nothing about current pace.
+    // The old count-based buffer let one such sample skew the display for minutes.
+    if (dt > 0 && dt <= PACE_MAX_DT) {
+        paceBuffer.push({ delta, dt, t: Date.now() });
+    }
+
+    const cutoff = Date.now() - PACE_WINDOW_MS;
+    paceBuffer = paceBuffer.filter(s => s.t >= cutoff);
+
     const totalD = paceBuffer.reduce((a, b) => a + b.delta, 0);
     const totalT = paceBuffer.reduce((a, b) => a + b.dt, 0);
     if (totalD > 5 && totalT > 0) {
-        const speed = totalD / totalT;
-        const secKm = 1000 / speed;
+        const secKm = 1000 / (totalD / totalT);
         document.getElementById('dispPace').textContent = formatPace(secKm);
-
-        const totalElapsed = (Date.now() - startTime - elapsedPauseMs) / 1000;
-        if (totalDistance > 100) {
-            const secPer5k = (totalElapsed / totalDistance) * 5000;
-            document.getElementById('dispETA').textContent = formatTimeLong(secPer5k);
-        }
     }
 }
 
@@ -658,10 +951,40 @@ function updateSplitTable() {
 // =====================
 // Chart
 // =====================
+// Chart.js loads from a CDN, so offline it is simply absent. A run must never fail to
+// start because the chart could not be built — the chart is the least important thing
+// on this screen.
+function setChartAvailable(available) {
+    const canvas = document.getElementById('runChart');
+    const fallback = document.getElementById('chartFallback');
+    if (canvas) canvas.classList.toggle('hidden', !available);
+    if (fallback) fallback.classList.toggle('hidden', available);
+}
+
 function initChart() {
     const canvas = document.getElementById('runChart');
-    if (chartInstance) chartInstance.destroy();
-    chartInstance = new Chart(canvas, {
+    if (!canvas) return;
+
+    if (typeof Chart === 'undefined') {
+        console.warn('Chart.js unavailable — continuing without the pace chart.');
+        chartInstance = null;
+        setChartAvailable(false);
+        return;
+    }
+
+    try {
+        if (chartInstance) chartInstance.destroy();
+        chartInstance = buildChart(canvas);
+        setChartAvailable(true);
+    } catch (e) {
+        console.warn('Chart init failed — continuing without the pace chart:', e);
+        chartInstance = null;
+        setChartAvailable(false);
+    }
+}
+
+function buildChart(canvas) {
+    return new Chart(canvas, {
         type: 'line',
         data: {
             labels: [],
@@ -732,9 +1055,31 @@ function updateChart() {
 // =====================
 // Beep
 // =====================
+// One context for the whole session. Creating one per beep leaked them until the
+// browser's cap (~6 on Safari) was hit and beeps went silent mid-run.
+let audioCtx = null;
+
+function getAudioContext() {
+    if (audioCtx) return audioCtx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try { audioCtx = new AC(); } catch (e) { return null; }
+    return audioCtx;
+}
+
+// Must be called from inside a real user-gesture handler: iOS starts audio contexts
+// suspended and only honours resume() during a gesture. Segment beeps fire from a GPS
+// callback, which is not a gesture, so without this they never sounded on iOS at all.
+function unlockAudio() {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => { });
+}
+
 function playBeep() {
+    const ctx = getAudioContext();
+    if (!ctx) return;
     try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume().catch(() => { });
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
@@ -761,7 +1106,10 @@ function setGPSStatus(quality, text) {
 // Display Reset
 // =====================
 function resetDisplay() {
-    document.getElementById('dispDist').textContent = '0.00';
+    document.getElementById('dispDist').textContent = '0';
+    // onPosition flips this to "kilometres" past 1km; without resetting it the next run
+    // opens reading "0 kilometres".
+    document.querySelector('#distCard .bs-unit').textContent = 'metres';
     document.getElementById('dispTimer').textContent = '00:00';
     document.getElementById('dispSegTimer').textContent = '00:00';
     document.getElementById('dispPace').textContent = '–:––';
@@ -782,9 +1130,9 @@ function resetDisplay() {
 // =====================
 // Save Run
 // =====================
-function saveRun() {
-    // Use captured elapsed time if still running (e.g. auto-save on close)
-    const totalTimeS = (Date.now() - startTime - elapsedPauseMs) / 1000;
+// totalTimeS is passed in by the caller so there is one definition of "how long did this
+// run take" — stopRun and the auto-save path both source it from currentElapsedS().
+function saveRun(totalTimeS) {
     const run = {
         id: Date.now(),
         date: new Date().toISOString(),
@@ -815,7 +1163,7 @@ function saveRun() {
 // Auto-save run data if page is closed/refreshed during a run
 window.addEventListener('beforeunload', () => {
     if (isRunning && totalDistance > 0) {
-        saveRun();
+        saveRun(currentElapsedS());
     }
 });
 

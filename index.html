@@ -26,10 +26,24 @@
     <!-- Animated Background Particles -->
     <canvas id="particleCanvas" class="particle-bg"></canvas>
 
-    <!-- Countdown Overlay -->
+    <!-- Countdown Overlay (GPS lock gate, then 3-2-1) -->
     <div class="countdown-overlay hidden" id="countdownOverlay">
-        <div class="countdown-number" id="countdownNum">3</div>
-        <div class="countdown-text">GET READY</div>
+        <div class="gps-wait hidden" id="gpsWait">
+            <div class="gps-wait-icon"><i class="fa-solid fa-satellite-dish"></i></div>
+            <div class="gps-wait-title">Acquiring GPS</div>
+            <div class="gps-wait-acc" id="gpsWaitAcc">Waiting for first fix…</div>
+            <div class="gps-wait-hint">Stand still in the open — locking on now means your first
+                strides get counted.</div>
+            <div class="gps-wait-actions">
+                <button type="button" class="btn-secondary hidden" id="gpsStartAnyway">Start
+                    anyway</button>
+                <button type="button" class="btn-secondary" id="gpsCancel">Cancel</button>
+            </div>
+        </div>
+        <div class="countdown-body hidden" id="countdownBody">
+            <div class="countdown-number" id="countdownNum">3</div>
+            <div class="countdown-text">GET READY</div>
+        </div>
     </div>
 
     <!-- App Header -->
@@ -136,6 +150,18 @@
             </div>
         </div>
 
+        <!-- Location Permission -->
+        <div class="perm-status glass-card" id="permStatus">
+            <div class="perm-dot" id="permDot"></div>
+            <span id="permText">Checking location permission…</span>
+            <button class="perm-btn hidden" id="permBtn">Enable Location</button>
+        </div>
+        <div class="perm-help hidden" id="permHelp">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Location is blocked. Open your browser's site settings for this page and set Location to
+                "Allow" (or "While using the app"), then reload.</span>
+        </div>
+
         <!-- GPS Status -->
         <div class="gps-status glass-card">
             <div class="gps-dot" id="gpsDot"></div>
@@ -148,7 +174,7 @@
             <button class="btn btn-start" id="btnStart">
                 <i class="fa-solid fa-play"></i> Start Run
             </button>
-            <button class="btn btn-pause hidden" id="btnPause">
+            <button class="btn btn-pause hidden" id="btnPause" aria-label="Pause run">
                 <i class="fa-solid fa-pause"></i>
             </button>
             <button class="btn btn-stop" id="btnStop" disabled>
@@ -199,6 +225,10 @@
             <h3 class="section-title"><i class="fa-solid fa-chart-area"></i> Pace Chart</h3>
             <div class="chart-inner">
                 <canvas id="runChart"></canvas>
+                <div class="chart-fallback hidden" id="chartFallback">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                    <p>Chart unavailable offline — your run is still being tracked.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -284,7 +314,8 @@
             <div class="h-modal-inner">
                 <div class="h-modal-header">
                     <h2 id="hModalTitle">Run Detail</h2>
-                    <button class="close-btn" id="closeModal"><i class="fa-solid fa-xmark"></i></button>
+                    <button class="close-btn" id="closeModal" aria-label="Close run detail"><i
+                            class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div id="hModalBody"></div>
             </div>
