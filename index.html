@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 
 <head>
     <meta charset="UTF-8">
@@ -17,8 +17,16 @@
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;700&display=swap"
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <link rel="stylesheet" href="styles.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        // Cache-bust local assets so browsers always fetch the latest CSS/JS
+        window.APP_ASSET_V = Date.now();
+        document.write('<link rel="stylesheet" href="styles.css?v=' + window.APP_ASSET_V + '">');
+    </script>
 </head>
 
 <body>
@@ -30,7 +38,7 @@
     <div class="countdown-overlay hidden" id="countdownOverlay">
         <div class="gps-wait hidden" id="gpsWait">
             <div class="gps-wait-icon"><i class="fa-solid fa-satellite-dish"></i></div>
-            <div class="gps-wait-title">Acquiring GPS</div>
+            <div class="gps-wait-title" data-i18n="acquiringGps">Acquiring GPS</div>
             <div class="gps-wait-acc" id="gpsWaitAcc">Waiting for first fix…</div>
             <div class="gps-wait-hint">Stand still in the open — locking on now means your first
                 strides get counted.</div>
@@ -42,7 +50,7 @@
         </div>
         <div class="countdown-body hidden" id="countdownBody">
             <div class="countdown-number" id="countdownNum">3</div>
-            <div class="countdown-text">GET READY</div>
+            <div class="countdown-text" data-i18n="getReady">GET READY</div>
         </div>
     </div>
 
@@ -53,10 +61,17 @@
                 <div class="brand-icon"><i class="fa-solid fa-bolt"></i></div>
                 <div>
                     <div class="brand-name">RunPulse</div>
-                    <div class="brand-tag">GPS Live Tracker</div>
+                    <div class="brand-tag" data-i18n="brandTag">GPS Live Tracker</div>
                 </div>
             </div>
             <div class="header-actions">
+                <span class="weather-badge hidden" id="weatherBadge" title="Weather"></span>
+                <button type="button" class="icon-btn" id="voiceToggle" title="Voice off" aria-label="Voice feedback">
+                    <i class="fa-solid fa-volume-high"></i>
+                </button>
+                <button type="button" class="icon-btn" id="themeToggle" title="Light" aria-label="Toggle theme">
+                    <i class="fa-solid fa-sun"></i>
+                </button>
                 <div class="wake-indicator" id="wakeIndicator" title="Screen Wake Lock">
                     <div class="wake-dot" id="wakeDot"></div>
                     <span id="wakeText">OFF</span>
@@ -69,15 +84,15 @@
     <nav class="nav" id="mainNav">
         <div class="nav-tab active" data-page="run">
             <i class="fa-solid fa-person-running"></i>
-            <span>Live Run</span>
+            <span data-i18n="liveRun">Live Run</span>
         </div>
         <div class="nav-tab" data-page="stats">
             <i class="fa-solid fa-chart-line"></i>
-            <span>Stats</span>
+            <span data-i18n="stats">Stats</span>
         </div>
         <div class="nav-tab" data-page="history">
             <i class="fa-solid fa-clock-rotate-left"></i>
-            <span>History</span>
+            <span data-i18n="history">History</span>
         </div>
         <div class="nav-indicator" id="navIndicator"></div>
     </nav>
@@ -87,7 +102,7 @@
 
         <!-- Segment Selector -->
         <div class="seg-row">
-            <label><i class="fa-solid fa-ruler"></i> Segment</label>
+            <label><i class="fa-solid fa-ruler"></i> <span data-i18n="segment">Segment</span></label>
             <div class="seg-pills" id="segPills">
                 <div class="seg-pill" data-size="125">125m</div>
                 <div class="seg-pill active" data-size="250">250m</div>
@@ -96,17 +111,49 @@
             </div>
         </div>
 
+        <!-- Training + Race controls -->
+        <div class="feature-row">
+            <div class="feature-field glass-card">
+                <label for="workoutSelect"><i class="fa-solid fa-dumbbell"></i> <span
+                        data-i18n="training">Training</span></label>
+                <select id="workoutSelect" class="field-select">
+                    <option value="none" data-i18n="noWorkout">Free run</option>
+                    <option value="intervals" data-i18n="intervals">Intervals 5×400m</option>
+                    <option value="tempo" data-i18n="tempo">Tempo 20 min</option>
+                    <option value="long" data-i18n="longRun">Long run 10 km</option>
+                </select>
+                <div class="workout-status" id="workoutStatus">Free run</div>
+            </div>
+            <div class="feature-field glass-card">
+                <label class="race-toggle-label">
+                    <input type="checkbox" id="raceToggle">
+                    <span data-i18n="raceMode">Race Mode</span>
+                </label>
+                <div id="racePanel" class="race-panel hidden">
+                    <label for="raceDist" data-i18n="targetDist">Target distance</label>
+                    <select id="raceDist" class="field-select">
+                        <option value="5000">5 km</option>
+                        <option value="10000">10 km</option>
+                        <option value="21097">Half</option>
+                        <option value="42195">Marathon</option>
+                    </select>
+                    <label for="raceTime" data-i18n="targetTime">Target time</label>
+                    <input type="text" id="raceTime" class="field-input" value="25:00" inputmode="numeric">
+                </div>
+            </div>
+        </div>
+
         <!-- Big Stats -->
         <div class="big-stats">
             <div class="big-stat glass-card" id="distCard">
                 <div class="bs-icon"><i class="fa-solid fa-road"></i></div>
-                <div class="bs-label">Distance</div>
+                <div class="bs-label" data-i18n="distance">Distance</div>
                 <div class="bs-value" id="dispDist">0.00</div>
                 <div class="bs-unit">metres</div>
             </div>
             <div class="big-stat glass-card">
                 <div class="bs-icon"><i class="fa-solid fa-stopwatch"></i></div>
-                <div class="bs-label">Total Time</div>
+                <div class="bs-label" data-i18n="totalTime">Total Time</div>
                 <div class="bs-value" id="dispTimer">00:00</div>
                 <div class="bs-unit">hh:mm:ss</div>
             </div>
@@ -116,18 +163,19 @@
         <div class="info-row">
             <div class="info-cell glass-card">
                 <div class="ic-icon"><i class="fa-solid fa-stopwatch"></i></div>
-                <div class="ic-label">Segment</div>
+                <div class="ic-label" data-i18n="segment">Segment</div>
                 <div class="ic-value" id="dispSegTimer">00:00</div>
             </div>
             <div class="info-cell glass-card">
                 <div class="ic-icon"><i class="fa-solid fa-gauge-high"></i></div>
-                <div class="ic-label">Pace</div>
+                <div class="ic-label" data-i18n="pace">Pace</div>
                 <div class="ic-value" id="dispPace">–:––</div>
             </div>
             <div class="info-cell glass-card">
                 <div class="ic-icon"><i class="fa-solid fa-flag-checkered"></i></div>
-                <div class="ic-label">Est. 5km</div>
+                <div class="ic-label" id="raceLabel" data-i18n="est5km">Est. 5km</div>
                 <div class="ic-value" id="dispETA">––:––</div>
+                <div class="ic-value race-delta hidden" id="dispRace">––</div>
             </div>
         </div>
 
@@ -135,17 +183,17 @@
         <div class="info-row">
             <div class="info-cell glass-card">
                 <div class="ic-icon"><i class="fa-solid fa-fire-flame-curved"></i></div>
-                <div class="ic-label">Calories</div>
+                <div class="ic-label" data-i18n="calories">Calories</div>
                 <div class="ic-value" id="dispCalories">0</div>
             </div>
             <div class="info-cell glass-card">
                 <div class="ic-icon"><i class="fa-solid fa-tachometer-alt"></i></div>
-                <div class="ic-label">Speed</div>
+                <div class="ic-label" data-i18n="speed">Speed</div>
                 <div class="ic-value" id="dispSpeed">0.0</div>
             </div>
             <div class="info-cell glass-card">
                 <div class="ic-icon"><i class="fa-solid fa-mountain"></i></div>
-                <div class="ic-label">Elevation</div>
+                <div class="ic-label" data-i18n="elevation">Elevation</div>
                 <div class="ic-value" id="dispElevation">–</div>
             </div>
         </div>
@@ -172,20 +220,27 @@
         <!-- Controls -->
         <div class="controls">
             <button class="btn btn-start" id="btnStart">
-                <i class="fa-solid fa-play"></i> Start Run
+                <i class="fa-solid fa-play"></i> <span data-i18n="startRun">Start Run</span>
             </button>
             <button class="btn btn-pause hidden" id="btnPause" aria-label="Pause run">
                 <i class="fa-solid fa-pause"></i>
             </button>
             <button class="btn btn-stop" id="btnStop" disabled>
-                <i class="fa-solid fa-stop"></i> Finish
+                <i class="fa-solid fa-stop"></i> <span data-i18n="finish">Finish</span>
             </button>
+        </div>
+
+        <!-- Live Map -->
+        <div class="section-card map-card">
+            <h3 class="section-title"><i class="fa-solid fa-map-location-dot"></i> <span
+                    data-i18n="mapTitle">Route Map</span></h3>
+            <div id="liveMap" class="live-map"></div>
         </div>
 
         <!-- Segment Log -->
         <div class="section-card">
             <div class="log-header">
-                <h3><i class="fa-solid fa-list-ul"></i> Segments</h3>
+                <h3><i class="fa-solid fa-list-ul"></i> <span data-i18n="segments">Segments</span></h3>
                 <div class="seg-badges">
                     <span class="badge badge-green hidden" id="bestBadge"><i class="fa-solid fa-bolt"></i> Best: <span
                             id="bestPaceVal"></span></span>
@@ -202,7 +257,7 @@
 
         <!-- Split Table -->
         <div class="section-card" id="splitSection">
-            <h3 class="section-title" id="splitTableLabel">Split Group Table</h3>
+            <h3 class="section-title" id="splitTableLabel" data-i18n="splitTable">Split Group Table</h3>
             <div class="table-wrapper">
                 <table class="split-table" id="splitTable">
                     <thead>
@@ -222,7 +277,8 @@
 
         <!-- Chart -->
         <div class="section-card chart-box">
-            <h3 class="section-title"><i class="fa-solid fa-chart-area"></i> Pace Chart</h3>
+            <h3 class="section-title"><i class="fa-solid fa-chart-area"></i> <span data-i18n="paceChart">Pace
+                    Chart</span></h3>
             <div class="chart-inner">
                 <canvas id="runChart"></canvas>
                 <div class="chart-fallback hidden" id="chartFallback">
@@ -236,8 +292,8 @@
     <!-- =============== STATS PAGE =============== -->
     <div class="page" id="page-stats">
         <div class="page-header">
-            <h2><i class="fa-solid fa-trophy"></i> Your Statistics</h2>
-            <p class="page-sub">Lifetime performance overview</p>
+            <h2><i class="fa-solid fa-trophy"></i> <span data-i18n="yourStats">Your Statistics</span></h2>
+            <p class="page-sub" data-i18n="lifetime">Lifetime performance overview</p>
         </div>
 
         <div class="stats-grid" id="statsGrid">
@@ -245,53 +301,69 @@
                 <div class="stat-icon orange"><i class="fa-solid fa-road"></i></div>
                 <div class="stat-info">
                     <div class="stat-val" id="statTotalDist">0 km</div>
-                    <div class="stat-label">Total Distance</div>
+                    <div class="stat-label" data-i18n="totalDistance">Total Distance</div>
                 </div>
             </div>
             <div class="stat-card glass-card">
                 <div class="stat-icon blue"><i class="fa-solid fa-shoe-prints"></i></div>
                 <div class="stat-info">
                     <div class="stat-val" id="statTotalRuns">0</div>
-                    <div class="stat-label">Total Runs</div>
+                    <div class="stat-label" data-i18n="totalRuns">Total Runs</div>
                 </div>
             </div>
             <div class="stat-card glass-card">
                 <div class="stat-icon green"><i class="fa-solid fa-gauge-high"></i></div>
                 <div class="stat-info">
                     <div class="stat-val" id="statBestPace">–:––</div>
-                    <div class="stat-label">Best Avg Pace</div>
+                    <div class="stat-label" data-i18n="bestAvgPace">Best Avg Pace</div>
                 </div>
             </div>
             <div class="stat-card glass-card">
                 <div class="stat-icon purple"><i class="fa-solid fa-clock"></i></div>
                 <div class="stat-info">
                     <div class="stat-val" id="statTotalTime">0h 0m</div>
-                    <div class="stat-label">Total Time</div>
+                    <div class="stat-label" data-i18n="totalTimeLabel">Total Time</div>
                 </div>
             </div>
             <div class="stat-card glass-card">
                 <div class="stat-icon red"><i class="fa-solid fa-fire"></i></div>
                 <div class="stat-info">
                     <div class="stat-val" id="statTotalCal">0</div>
-                    <div class="stat-label">Est. Calories</div>
+                    <div class="stat-label" data-i18n="estCalories">Est. Calories</div>
                 </div>
             </div>
             <div class="stat-card glass-card">
                 <div class="stat-icon amber"><i class="fa-solid fa-arrow-trend-up"></i></div>
                 <div class="stat-info">
                     <div class="stat-val" id="statLongestRun">0 km</div>
-                    <div class="stat-label">Longest Run</div>
+                    <div class="stat-label" data-i18n="longestRun">Longest Run</div>
                 </div>
             </div>
         </div>
 
         <!-- Export/Import -->
         <div class="section-card" style="margin-top:1.25rem;">
-            <h3 class="section-title"><i class="fa-solid fa-database"></i> Data Management</h3>
+            <h3 class="section-title"><i class="fa-solid fa-database"></i> <span data-i18n="dataMgmt">Data
+                    Management</span></h3>
             <div class="data-actions">
-                <button class="btn-secondary" id="exportBtn"><i class="fa-solid fa-download"></i> Export Data</button>
-                <label class="btn-secondary" for="importFile"><i class="fa-solid fa-upload"></i> Import Data</label>
+                <button class="btn-secondary" id="exportBtn"><i class="fa-solid fa-download"></i> <span
+                        data-i18n="exportData">Export Data</span></button>
+                <label class="btn-secondary" for="importFile"><i class="fa-solid fa-upload"></i> <span
+                        data-i18n="importData">Import Data</span></label>
                 <input type="file" id="importFile" accept=".json" style="display:none">
+            </div>
+        </div>
+
+        <!-- Settings: language -->
+        <div class="section-card" style="margin-top:1.25rem;">
+            <h3 class="section-title"><i class="fa-solid fa-gear"></i> <span data-i18n="settings">Settings</span></h3>
+            <div class="settings-grid">
+                <label for="langSelect" data-i18n="language">Language</label>
+                <select id="langSelect" class="field-select">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="nl">Nederlands</option>
+                </select>
             </div>
         </div>
     </div>
@@ -300,11 +372,11 @@
     <div class="page" id="page-history">
         <div class="page-header">
             <div>
-                <h2><i class="fa-solid fa-clock-rotate-left"></i> Run History</h2>
-                <p class="page-sub" id="histSummary">Your recent runs</p>
+                <h2><i class="fa-solid fa-clock-rotate-left"></i> <span data-i18n="runHistory">Run History</span></h2>
+                <p class="page-sub" id="histSummary" data-i18n="recentRuns">Your recent runs</p>
             </div>
             <button class="btn-danger-sm" id="clearHistoryBtn">
-                <i class="fa-solid fa-trash-can"></i> Clear
+                <i class="fa-solid fa-trash-can"></i> <span data-i18n="clear">Clear</span>
             </button>
         </div>
         <div class="history-list" id="historyList"></div>
@@ -328,8 +400,11 @@
         <span id="toastMsg">Saved!</span>
     </div>
 
-    <script src="script.js"></script>
-    <!-- <script src="test-simulator.js"></script> -->
+    <script>
+        document.write('<script src="script.js?v=' + window.APP_ASSET_V + '"><\/script>');
+        document.write('<script src="i18n.js?v=' + window.APP_ASSET_V + '"><\/script>');
+        document.write('<script src="features.js?v=' + window.APP_ASSET_V + '"><\/script>');
+    </script>
 
 </body>
 

@@ -1408,3 +1408,192 @@ body {
 .empty-state p {
     font-size: 0.85rem;
 }
+
+/* ---- LIGHT THEME ---- */
+[data-theme="light"] {
+    --bg: #f4f6fb;
+    --surface: #ffffff;
+    --card: #ffffff;
+    --card2: #eef1f8;
+    --glass: rgba(15, 23, 42, 0.03);
+    --glass2: rgba(15, 23, 42, 0.06);
+    --border: rgba(15, 23, 42, 0.08);
+    --border2: rgba(15, 23, 42, 0.14);
+    --text1: #0f172a;
+    --text2: #475569;
+    --text3: #94a3b8;
+    --glow-orange: 0 0 24px rgba(255, 107, 53, 0.18);
+    --glow-green: 0 0 16px rgba(0, 180, 90, 0.15);
+}
+
+[data-theme="light"] .countdown-overlay {
+    background: rgba(244, 246, 251, 0.95);
+}
+
+[data-theme="light"] .brand-name {
+    background: linear-gradient(135deg, #0f172a, var(--orange));
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+[data-theme="light"] .leaflet-container {
+    background: #e8edf5;
+}
+
+/* ---- HEADER ICON BUTTONS / WEATHER ---- */
+.icon-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--glass);
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 0.85rem;
+}
+
+.icon-btn:hover {
+    border-color: var(--border2);
+    color: var(--text1);
+}
+
+.icon-btn.active {
+    color: var(--orange);
+    border-color: rgba(255, 107, 53, 0.35);
+    background: rgba(255, 107, 53, 0.1);
+}
+
+.weather-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text2);
+    padding: 0.3rem 0.55rem;
+    border-radius: 100px;
+    background: var(--glass);
+    border: 1px solid var(--border);
+    white-space: nowrap;
+    max-width: 9.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---- FEATURE CONTROLS (training / race) ---- */
+.feature-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    margin: 0.75rem 0;
+}
+
+@media (max-width: 480px) {
+    .feature-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.feature-field {
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.feature-field > label,
+.race-toggle-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.race-toggle-label input {
+    accent-color: var(--orange);
+}
+
+.field-select,
+.field-input {
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text1);
+    font-family: var(--font);
+    font-size: 0.85rem;
+}
+
+.workout-status {
+    font-size: 0.75rem;
+    color: var(--orange2);
+    font-weight: 600;
+    min-height: 1.1em;
+}
+
+.race-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.25rem;
+}
+
+.race-panel label {
+    font-size: 0.68rem;
+    color: var(--text3);
+}
+
+.race-delta {
+    font-size: 0.85rem !important;
+}
+
+/* ---- MAP ---- */
+.map-card {
+    overflow: hidden;
+}
+
+.live-map,
+.hist-map {
+    height: 220px;
+    width: 100%;
+    border-radius: var(--r2);
+    z-index: 1;
+    border: 1px solid var(--border);
+}
+
+.hist-map {
+    height: 200px;
+    margin-top: 0.75rem;
+}
+
+.hist-map-wrap {
+    margin-top: 0.5rem;
+}
+
+.leaflet-container {
+    font-family: var(--font);
+}
+
+/* ---- SETTINGS ---- */
+.settings-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.55rem 0.75rem;
+    align-items: center;
+}
+
+.settings-grid > label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text2);
+}
+
+.modal-actions .data-actions {
+    flex-wrap: wrap;
+}

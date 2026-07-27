@@ -18,6 +18,11 @@ let totalDistance = 0;
 let previousPosition = null;
 let segments = [];
 let segmentSize = 250;
+let trackPoints = [];           // [{lat, lon, t, ele}] polyline for map / share
+let lastTrackLat = null;
+let lastTrackLon = null;
+const TRACK_MIN_M = 5;          // Min spacing between stored track points
+const TRACK_MAX_POINTS = 8000;
 
 let chartInstance = null;
 let lastElevation = null;
@@ -96,6 +101,37 @@ function kalmanUpdate(kf, measurement, accuracy) {
 
 const SEGMENT_SIZE_KEY = 'lrt_seg_size';
 const HISTORY_KEY = 'lrt_history';
+const THEME_KEY = 'lrt_theme';
+const VOICE_KEY = 'lrt_voice';
+const LANG_KEY = 'lrt_lang';
+const RACE_KEY = 'lrt_race';
+
+// Optional hook for live map / UI modules (features.js) — no-op until assigned.
+let onTrackUpdated = null;
+
+function appendTrackPoint(lat, lon, t, ele) {
+    if (trackPoints.length >= TRACK_MAX_POINTS) return;
+    if (lastTrackLat != null) {
+        if (haversine(lastTrackLat, lastTrackLon, lat, lon) < TRACK_MIN_M) return;
+    }
+    trackPoints.push({
+        lat: Math.round(lat * 1e6) / 1e6,
+        lon: Math.round(lon * 1e6) / 1e6,
+        t: t || Date.now(),
+        ele: ele != null && isFinite(ele) ? Math.round(ele) : null,
+    });
+    lastTrackLat = lat;
+    lastTrackLon = lon;
+    if (typeof onTrackUpdated === 'function') {
+        try { onTrackUpdated(); } catch (e) { /* map refresh must never break tracking */ }
+    }
+}
+
+function resetTrack() {
+    trackPoints = [];
+    lastTrackLat = null;
+    lastTrackLon = null;
+}
 
 // =====================
 // Particles Background
@@ -498,6 +534,7 @@ function prepareRun() {
     totalDistance = 0;
     previousPosition = null;
     segments = [];
+    resetTrack();
     elapsedPauseMs = 0;
     pauseStartTime = 0;
     elevationGain = 0;
@@ -544,6 +581,16 @@ function startRun() {
     startGpsWatch();   // no-op if prepareRun's watch is still live
     acquireWakeLock();
 
+    // Seed the polyline from the locked fix so the map has a start marker immediately.
+    if (previousPosition && previousPosition.filteredLat != null) {
+        appendTrackPoint(
+            previousPosition.filteredLat,
+            previousPosition.filteredLon,
+            previousPosition.timestamp || Date.now(),
+            previousPosition.coords && previousPosition.coords.altitude
+        );
+    }
+
     // Last, and non-fatal: Chart.js is CDN-loaded and may be missing offline. Nothing
     // below this line is required for the run to be tracked.
     initChart();
@@ -560,7 +607,7 @@ function pauseRun() {
     const btnPause = document.getElementById('btnPause');
     btnStart.classList.remove('hidden');
     btnStart.disabled = false;
-    btnStart.innerHTML = '<i class="fa-solid fa-play"></i> Resume';
+    btnStart.innerHTML = `<i class="fa-solid fa-play"></i> ${typeof t === 'function' ? t('resume') : 'Resume'}`;
     btnStart.classList.remove('running');
     btnPause.classList.add('hidden');
 
@@ -623,7 +670,7 @@ function stopRun() {
     const btnStop = document.getElementById('btnStop');
 
     btnStart.classList.remove('running', 'hidden');
-    btnStart.innerHTML = '<i class="fa-solid fa-play"></i> Start Run';
+    btnStart.innerHTML = `<i class="fa-solid fa-play"></i> ${typeof t === 'function' ? t('startRun') : 'Start Run'}`;
     btnStart.disabled = false;
     btnPause.classList.add('hidden');
     btnStop.disabled = true;
@@ -758,6 +805,7 @@ function onPosition(pos) {
     pos.filteredLat = filteredLat;
     pos.filteredLon = filteredLon;
     previousPosition = pos;
+    appendTrackPoint(filteredLat, filteredLon, pos.timestamp, altitude);
 
     // Update distance display
     const distEl = document.getElementById('dispDist');
@@ -1141,6 +1189,7 @@ function saveRun(totalTimeS) {
         segmentSize,
         elevationGain: Math.round(elevationGain),
         calories: Math.round(totalDistance / 1000 * 62),
+        track: trackPoints.slice(),
         segments: segments.map(s => ({
             distLabel: s.distLabel,
             timeS: Math.round(s.timeS * 10) / 10,

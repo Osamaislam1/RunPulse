@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A premium real-time GPS running tracker with live pace, segments, calorie tracking, and detailed analytics.**
+**A real-time GPS running tracker with live pace, route maps, training plans, race mode, and detailed analytics.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)](https://developer.mozilla.org/en-US/docs/Web/HTML)
@@ -45,10 +45,22 @@
   - Total time and calories
   - Longest run
 - **Detailed Run History** with sortable entries
-- **Run Detail Modal** with segment breakdowns
+- **Run Detail Modal** with segment breakdowns, route map, and share image
+- **GPS Track Storage** — each run saves a polyline for map and share
 - **Data Export/Import** (JSON format)
 
+### 🗺️ Maps, Training & Race
+- **Live Route Map** — Leaflet polyline updates as you run
+- **History Route Map** — replay the path in the run detail modal
+- **Training Plans** — free run, intervals (5×400m), tempo (20 min), long run (10 km)
+- **Race Mode** — set target distance and finish time; live ahead/behind vs goal
+
 ### 🎨 User Experience
+- **Dark / Light Themes** — preference toggle in the header
+- **Voice Feedback** — spoken pace/distance on segment complete
+- **Weather Overlay** — temperature and conditions after GPS lock (Open-Meteo)
+- **Multi-Language (i18n)** — English, Español, Nederlands
+- **Social Share Images** — export a run summary card from history
 - **Animated Particle Background**
 - **Glass-morphism UI Design**
 - **Countdown Timer** before run start
@@ -65,16 +77,19 @@
 
 **Live Run Interface**
 - Real-time distance, pace, and time tracking
-- GPS accuracy indicator
+- Live route map, training plan, and race mode controls
+- GPS accuracy indicator and weather badge
 - Segment completion log
 
 **Statistics Dashboard**
 - Lifetime performance metrics
 - Visual stat cards with icons
+- Language settings (EN / ES / NL)
 
 **Run History**
 - Chronological run list
 - Detailed segment analysis per run
+- Route map and share image from the detail modal
 
 ---
 
@@ -138,24 +153,30 @@ Then enable GitHub Pages in repository settings.
 ### Starting a Run
 
 1. **Select Segment Size** (125m, 250m, 500m, or 1km)
-2. Click **"Start Run"** button
-3. Wait for **GPS lock** (green indicator with good accuracy)
-4. The **countdown** (3-2-1-GO!) will begin
-5. Start running! 🏃‍♂️
+2. Optionally choose a **Training** plan and/or enable **Race Mode** (target distance + time)
+3. Click **"Start Run"** button
+4. Wait for **GPS lock** (green indicator with good accuracy)
+5. The **countdown** (3-2-1-GO!) will begin
+6. Start running! 🏃‍♂️
 
 ### During the Run
 
 - **Distance** updates in real-time
 - **Current Pace** shows your live pace per kilometer
 - **Segment Timer** counts time since last segment
-- **Segments automatically complete** with vibration + beep
+- **Segments automatically complete** with vibration + beep (and voice if enabled)
+- **Route map** draws your path live
+- **Training status** advances through workout steps (distance / rest / timed)
+- **Race Mode** shows ahead/behind vs your goal pace
 - **GPS Accuracy** badge shows signal quality
+- **Weather** badge appears in the header after GPS lock
 
 ### Controls
 
 - **Pause** — Stops tracking, timer, and GPS (resume later)
 - **Resume** — Continues from where you paused
-- **Finish** — Saves the run to history
+- **Finish** — Saves the run (including GPS track) to history
+- **Theme / Voice** — header toggles for light/dark mode and spoken feedback
 
 ### Viewing Statistics
 
@@ -167,11 +188,15 @@ Navigate to the **Stats** tab to see:
 - Estimated calories burned
 - Your longest single run
 
+Under **Settings**, pick the UI language (English, Español, or Nederlands).
+
 ### Managing History
 
 **View Past Runs**
 - Tap any run card to see detailed segment breakdown
 - Color-coded segments (green=fast, blue=average, orange=slow)
+- Route map (when a GPS track was saved)
+- **Share** — download or share a summary image card
 
 **Export Data**
 - Click "Export Data" to download JSON backup
@@ -195,7 +220,10 @@ Navigate to the **Stats** tab to see:
 
 ### APIs & Libraries
 - **Geolocation API** — High-accuracy GPS tracking
+- **Leaflet** — Live and history route maps
+- **Open-Meteo** — Weather temperature and conditions (no API key)
 - **Chart.js** — Pace visualization
+- **Web Speech API** — Voice feedback (`speechSynthesis`)
 - **Web Audio API** — Segment completion beep
 - **Vibration API** — Haptic feedback
 - **Screen Wake Lock API** — Keep display active
@@ -231,39 +259,47 @@ haversine(lat1, lon1, lat2, lon2)
 ```
 runpulse-gps-tracker/
 ├── index.html          # Main HTML structure
-├── styles.css          # Complete styling (glass-morphism UI)
-├── script.js           # Core application logic
-├── README.md           # This file
-└── assets/             # (optional) Screenshots, icons
+├── styles.css          # Styling (glass-morphism, themes, maps)
+├── script.js           # Core GPS tracking, history, charts
+├── features.js         # Map, theme, voice, weather, race, training, share
+├── i18n.js             # Locales (EN / ES / NL)
+├── test/
+│   └── run-sim.js      # Headless GPS / timing regression checks
+└── README.md           # This file
 ```
 
 ### File Breakdown
 
-**index.html** (356 lines)
-- App header with wake lock indicator
+**index.html**
+- App header (wake lock, theme, voice, weather)
 - Navigation tabs (Live Run, Stats, History)
-- Segment selector & big stat cards
-- GPS status indicator
-- Control buttons
-- Segment log & split table
-- Chart.js canvas
-- History modal
+- Training / race controls, segment selector, big stats
+- Live map, GPS status, controls
+- Segment log, split table, Chart.js canvas
+- Stats, settings (language), history modal
 
-**script.js** (700+ lines)
-- State management
-- GPS tracking with Kalman filtering
-- Segment completion logic
-- Real-time UI updates
-- Chart rendering
-- localStorage persistence
-- Export/import functionality
+**script.js**
+- State management and GPS watch
+- Kalman filtering and track-point storage
+- Segment completion, timers, pace chart
+- localStorage history, export/import
 
-**styles.css** (not included but referenced)
-- Glass-morphism design system
-- Responsive breakpoints
-- Animated particles
-- Custom scrollbars
-- Toast notifications
+**features.js**
+- Leaflet live/history maps
+- Dark/light theme and voice feedback
+- Weather overlay, race mode, training plans
+- Social share image cards
+
+**i18n.js**
+- Translation strings and `t()` / language switcher
+
+**styles.css**
+- Glass-morphism design system and light theme
+- Map, training/race, and header controls
+- Responsive layout, particles, toasts
+
+**test/run-sim.js**
+- Node-based simulator for GPS timing regressions
 
 ---
 
@@ -370,16 +406,16 @@ Open an issue describing:
 
 ## 📋 Roadmap
 
-- [ ] **Map View** — Show running route on map
+- [x] **Map View** — Show running route on map
 - [ ] **Heart Rate Integration** — Bluetooth HR monitor support
-- [ ] **Training Plans** — Interval/tempo/long run workouts
-- [ ] **Social Sharing** — Export run images for social media
-- [ ] **Voice Feedback** — Audio pace/distance announcements
-- [ ] **Dark/Light Themes** — User preference toggle
-- [ ] **Multi-Language Support** — i18n implementation
+- [x] **Training Plans** — Interval/tempo/long run workouts
+- [x] **Social Sharing** — Export run images for social media
+- [x] **Voice Feedback** — Audio pace/distance announcements
+- [x] **Dark/Light Themes** — User preference toggle
+- [x] **Multi-Language Support** — i18n (English, Español, Nederlands)
 - [ ] **Strava Integration** — Direct upload to Strava
-- [ ] **Weather Overlay** — Show temperature/conditions
-- [ ] **Race Mode** — Virtual pacing for target times
+- [x] **Weather Overlay** — Show temperature/conditions
+- [x] **Race Mode** — Virtual pacing for target times
 
 ---
 
@@ -390,7 +426,7 @@ This project is licensed under the **MIT License** — see below for details:
 ```
 MIT License
 
-Copyright (c) 2024 RunPulse
+Copyright (c) 2026 RunPulse
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -415,6 +451,8 @@ SOFTWARE.
 
 ## 🙏 Acknowledgments
 
+- **Leaflet** — Interactive route maps
+- **Open-Meteo** — Free weather forecast API
 - **Chart.js** — Beautiful pace visualizations
 - **Font Awesome** — Comprehensive icon set
 - **Google Fonts** — Inter & JetBrains Mono typography

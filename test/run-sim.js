@@ -93,6 +93,7 @@ const wrapped = new Function(
       isRunning, isPaused, gpsReady, totalDistance, segments,
       elapsedPauseMs, segmentStartTime, startTime, elevationGain,
       paceBufferLen: paceBuffer.length,
+      trackLen: trackPoints.length,
     }),
     setSegmentSize: v => { segmentSize = v; },
     HISTORY_KEY,
@@ -198,6 +199,7 @@ const history = JSON.parse(localStorage.getItem(app.HISTORY_KEY) || '[]');
 check('run saved', history.length, 1);
 if (history.length) {
     check('saved totalTimeS (s)', history[0].totalTimeS, elapsedBeforeFinalPause, 2);
+    check('saved track points', Array.isArray(history[0].track) && history[0].track.length > 0, true);
 }
 
 // =============================================================================
