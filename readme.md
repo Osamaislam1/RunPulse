@@ -463,7 +463,7 @@ SOFTWARE.
 
 ## 📞 Support
 
-- **Issues:** [GitHub Issues](https://github.com/Osamaislam1/runpulse-gps-tracker/issues)
+- **Issues:** [GitHub Issues](https://github.com/Osamaislam1/RunPulse/issues)
 - **Email:** osama.islam29@gmail.com 
 
 ---
